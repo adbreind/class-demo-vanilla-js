@@ -1,0 +1,172 @@
+<html>
+	<head>
+	<title>Lab!</title>
+	</head>
+	<body>
+	Contact list:
+	<ul class="contactlist"></ul>
+	Search for: <input class="searchtext" type="text"/>
+	<button class="find">Find</button>
+	<div class="output"></div>
+	<script>
+	
+	contactPrototype = {
+		toString : function() {
+			return this.first + " " + this.last + " " + this.email;
+		},
+
+		phone : "800-555-1111"
+	};
+
+	Contact = function() {};
+
+	Contact.prototype = contactPrototype;
+
+	contactManager = {
+
+		contacts : [],
+
+		build : function(obj) {
+			var newContact = new Contact();
+			for (var k in obj)
+				newContact[k] = obj[k];			
+			this.contacts.push(newContact);
+		},
+
+		find : function(target, fieldname) {
+			if (fieldname === undefined)
+				fieldname = "last";
+			var contacts = this.contacts;
+			for (var i=0; i<contacts.length; i++)
+				if (contacts[i][fieldname] == target)
+					return contacts[i];
+		}
+	};
+
+	stateMachine = {
+		enterState : function(name, data) {
+			var state = this.states[name];
+			state.enter(data);
+			window.location.hash = name + (data ? "-" + data : "");
+		},
+
+		states : {
+			list : {
+				enter : function() {
+					renderList(contactManager.contacts, document.querySelector(".contactlist"));
+				}
+			},
+
+			contact : {
+				enter : function(id) {
+					var contact = contactManager.find(id, "id");
+					renderDetail(contact, document.querySelector(".output"));
+					var view = viewForModel(contact);
+					highlightElement(view);
+				}
+			}
+		}
+	};
+
+	window.onhashchange = function() {
+		var hash = window.location.hash;
+		var stateName, data;
+		if (!hash)
+			stateName = "list";
+		else {
+			params = hash.split("-");
+			stateName = params[0].substr(1);
+			data = params[1];
+		}
+		stateMachine.enterState(stateName, data);
+	}
+	
+	document.querySelector(".find").addEventListener("click", function(){
+		var name = document.querySelector(".searchtext").value;
+		var contact = contactManager.find(name);
+		stateMachine.enterState("contact", contact.id);
+	});
+
+	function viewForModel(model) {
+		return document.querySelector("[data-contact='" + model.id + "']");
+	}
+
+	CONTACT_TEMPLATE = "<li data-contact='{{id}}'>{{last}}, {{first}}  --- {{email}}</li>";
+
+	function populateTemplate(model, template) {
+		for (var k in model) {
+			template = template.replace("{{"+k+"}}", model[k]);
+		}
+		return template;
+	}
+
+	function renderList(list, element) {
+		element.innerHTML = "";
+		for (var i=0; i<list.length; i++)
+			element.insertAdjacentHTML("beforeend", 
+				populateTemplate(list[i], CONTACT_TEMPLATE));
+	}
+
+	function renderDetail(item, element) {
+		element.innerHTML = "Found " + item;
+	}
+
+	function makeArray(pseudoArray) {
+		return [].slice.call(pseudoArray);
+	}
+
+	function highlightElement(element) {
+		makeArray(document.querySelectorAll("li")).forEach(function(li){
+				li.style.background="";
+			})
+		element.style.background = "yellow";
+	}
+
+	document.querySelector(".contactlist").addEventListener("click", function(e) {
+		var target = e.target;
+		if (target.tagName == "LI") {
+			var model = modelForView(target);
+			stateMachine.enterState("contact", model.id);
+		}
+	});
+
+	function modelForView(view) {
+		var id = view.dataset.contact;
+		return contactManager.find(id, "id");
+	}
+
+	function getContacts()
+	{
+		var url = "http://localhost:3000/contact"; // a sample service that returns plain text
+
+		if (window.XMLHttpRequest) {
+			var xhr = new XMLHttpRequest();
+		} else {
+			alert("No AJAX support, or else old IE version");
+		}
+
+		xhr.onreadystatechange = function() {
+			if (xhr.readyState == XMLHttpRequest.DONE) {
+				if (xhr.status == 200) {
+					var rawData = JSON.parse(xhr.responseText);
+					contactManager.contacts = [];
+					rawData.forEach(contactManager.build.bind(contactManager));
+					renderList(contactManager.contacts, document.querySelector(".contactlist"));
+					window.onhashchange();
+				} else {
+					alert("Error retrieving data: " + xhr.statusText);
+				}
+			}
+		};
+
+		xhr.open("GET", url, true); // true -> async
+		xhr.send(null); // null for a GET; data for POST, PUT, etc.
+	}
+	
+	getContacts();
+
+	</script>
+
+
+	</body>
+</html>
